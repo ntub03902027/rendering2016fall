@@ -1,0 +1,83 @@
+<h1 id="report-for-final-project">Report for Final Project</h1>
+<p>Light-field Camera Implementation</p>
+<p>Digital Image Synthesis, Fall 2016</p>
+<p>DEADLINE: 01/17/2017,23:59</p>
+<p>INSTRUCTOR: Yung-Yu Chaung</p>
+<p>b03902027 (Kuan-Chun Wang)</p>
+<h2 id="outline">Outline</h2>
+<ol style="list-style-type: decimal">
+<li>Abstract</li>
+<li>Introduction</li>
+<li>Implementation details</li>
+<li>Results</li>
+<li>Building and running the modified pbrt</li>
+<li>Other notes and future works</li>
+<li>Acknowledgements &amp; References</li>
+</ol>
+<h3 id="abstract">Abstract</h3>
+<p>In this project, I attempted to implement a novel design of camera called the plenoptic camera (or, light-field camera), which is introduced by Ren Ng et al. in 2005. Such a camera, unlike traditional ones, will save not only light power data on every pixel, but also the directions of all lights toward every pixel. With the additional information of the light directions, we are able to roughly synthesize films at different positions in the camera space of pbrt (i.e. refocusing).</p>
+<h3 id="introduction">Introduction</h3>
+<p>A light field is a physical field that is subject to the influence from lights (visible electromagnetic rays). A light-field camera is a camera which tries to capture the light field on a 2D film plane, and thus the captured field can be expressed as a 4D function L(s, t, u ,v), where (s, t) represents a spacial point on the film plane, and (u, v) represents the angles of lights that hit on the film; in total, L(s, t, u, v) returns the energy of the light power on point (s, t) which is given from the light from the direction (u, v). To capture the light field, the physical implementation replaces the film in traditional cameras with an array of &quot;microlens&quot;, and place a photosensor in the back to detect the lights from every valid direction. Then such camera will use software to perform refocusing with those data and output images with different focuses.</p>
+<div class="figure">
+<img src="./images/lfcamera.png" />
+</div>
+<h3 id="implementation-details">Implementation details</h3>
+<p>According to the structure of the light-field camera introduced in the papers, to implement a light-field camera in pbrt, one should attempt to save 4D field data from the camera and, reconstruct the images on synthestic films according to the light field generated from the camera. Recall that I've successfully implemented a realistic camera in pbrt in homework 2. In this project, I tried to add a new class, called &quot;LightfieldCamera&quot;, which is extended from the realistic camera that I created in homework 2. In LightfieldCamera, unlike what a realistic camera does, it simulates its film as the microlens array of the real light-field camera, and after rendering the lightfield image, it uses the image to create synthesized images with given position, which is the simulation of the software implementation of the physical camera.</p>
+<h4 id="capturing-light-field-data">Capturing light field data</h4>
+<p>To simulate the normal film to the microlens, I changed the sampling method within the realistic camera. In the realistic camera, when the sampler samples a point on the raster space, it transforms it into the camera space, and uniformly samples another point on the last len of the realistic lens set. Unlike above, in light-field camera, I mapped every microlen linearly to the main lens, since in my implementation, every microlen records lights from all valid directions to a single pixel (pretend that every microlen repersents a pixel). Doing so will guarantee that lights from all different directions from the main lens will be recorded.</p>
+<p>The following is the raw lightfield data modified from the scene &quot;dof-dragons.dgauss.pbrt&quot; (provided in homework 2) with 16 samples per pixel, and with microlen size = 8x8. Every dots seen in the image represents the light power captured within a single microlen.</p>
+<div class="figure">
+<img src="./images/raw1.png" />
+</div>
+<p>And the following is the rearrangement (or &quot;montage&quot;) of the raw data, which is achieved by placing every same (u, v) form all microlens together. Since the microlen size is 8x8 above, there should be 8x8 subimages in this image. What's interesting is that every subimage seems to represent a result with a slightly moved perspective.</p>
+<div class="figure">
+<img src="./images/montage1.png" />
+</div>
+<h4 id="synthetic-refocusing">Synthetic refocusing</h4>
+<p>After the raw light-field image is generated, one can resample the light-field given the raw image to generate refocused images on the synthestic films between the main lens and the microlens array. In this step, I sampled points on the main lens (u, below) for every pixel on the synthestic films (s'), and then decide the power contribution according to the light field image (s). In my implementation, I defined a value &quot;alpha&quot; which represents the ratio between the distance of the main lens to the synthetic film and the distance of the main lens to the microlens array.</p>
+<div class="figure">
+<img src="./images/refocus.png" />
+</div>
+<p>However, my current implementation is rather naive; I just simply sample some points deterministically on the main lens, rather than applying other more sophisicated sampling methods. Furthermore, I only implemented a 2D interpolation on (s, t) (the lightfield function is L(s, t, u, v)) (this is also due to my simple sampling method on (u, v) noted just above).</p>
+<h4 id="modification-on-the-scene-file-.pbrt">Modification on the scene file (.pbrt)</h4>
+<p>Compared with realistic cameras, a light-field camera requires additional parameters to be defined in the scene description. In my implementation, the film resolution represents the resolution of the raw light field image. In the declaration of the camera, there are two parameter added: &quot;microlens_diameter&quot; represents the diamater of every microlen and &quot;alpha&quot; represents an array of alpha values, and the modified system will render images on synthetic films with different alpha values respectively, and their resolutions will be (xresolution/microlens_diameter)x(yresolution/microlens_diameter).</p>
+<h3 id="results">Results</h3>
+<p>The following are the results of the scene dof-dragons.dgauss.lightfield.pbrt (raw 2048x2048, 16 samples, filmdistance = 36.77 (the focal length of the given gaussian lens set), microlens_diameter = 8, alpha = 0.99, 0.90, 0.80, 0.70). The left images are the images synthesized from the light field with alpha value (0.99, 0.90, 0.80, 0.70), respectively, and the right ones are the images directly rendered with realistic cameras (256x256, 128 samples) with different filmdistances (36.77, 33.09 = 36.77<em>0.9, 29.42 = 36.77</em>0.8, 25.74=36.77*0.7). In my opinion, the more similar the two images are, the better the result is.</p>
+<p><img src="./images/result1_0.png" /> <img src="./images/result1_0_0.png" /></p>
+<p><img src="./images/result1_1.png" /> <img src="./images/result1_0_1.png" /></p>
+<p><img src="./images/result1_2.png" /> <img src="./images/result1_0_2.png" /></p>
+<p><img src="./images/result1_3.png" /> <img src="./images/result1_0_3.png" /></p>
+<p>From above, we can learn that the smaller the alpha value is (i.e. the synthetic film plane is closer to the main lens), the larger differences appears. When alpha is high, the synthesized images seem to have little differences, while when alpha decreases more, the images seem to become more different than the one generated by realistic cameras.</p>
+<h4 id="additional-results">Additional results</h4>
+<p>The results below are the comparison when the filmdistance of the light-field camera is 40.45 (= 1.1<em>36.77), given alpha = 0.99, 0.91, 0.82, and the filmdistance of the realistic camera are 40.45 (= 1.1</em>36.77), 36.77 (= 0.91<em>40.45), 33.09 (= 0.98</em>40.45) respectively. The left images are synthesized from light-field camera, and the right ones are rendered with realistic camera.</p>
+<p><img src="./images/result2_0.png" /> <img src="./images/result2_0_0.png" /></p>
+<p><img src="./images/result2_1.png" /> <img src="./images/result1_0_0.png" /></p>
+<p><img src="./images/result2_2.png" /> <img src="./images/result1_0_1.png" /></p>
+<p>Something interesting is that, when alpha is 0.91, the grids on the ground is clearer than the image with alpha = 0.99, while the triangles aren't.</p>
+<p>The overall results are not desirable enough and may have some rooms of improvement. Though in a certain range of alpha values, the results are good enough, but my aim is to increase the quality of the images above to a certain level, which may require more study in the future.</p>
+<h3 id="building-and-running-the-modified-pbrt">Building and running the modified pbrt</h3>
+<p>I tested the modified pbrt in linux. The file I added and modified are listed below:</p>
+<p>src/core/api.cpp (modified)</p>
+<p>src/film/image.cpp (modified)</p>
+<p>src/film/image.h (modified)</p>
+<p>src/camera/realistic.cpp (directly from hw2)</p>
+<p>src/camera/realistic.h (directly from hw2)</p>
+<p>src/camera/lightfield.cpp (newly added)</p>
+<p>src/camera/lightfield.h (newly added)</p>
+<p>Simply add all of them to pbrt and recompile them.</p>
+<h3 id="other-notes-and-future-works">Other notes and future works</h3>
+<p>Due to limited available time thanks to numerous other finals, I have some more stuffs would like but haven't done yet. Here are some improvements and works to do for this project in the future. I'll list them below:</p>
+<ol style="list-style-type: decimal">
+<li>A better method for synthestic refocusing</li>
+<li>Parallel/faster refocusing algorithms (The synthestic refocusing can be done parallelly)</li>
+<li>Synthesize images with different perspectives (I've heard that light-field cameras are capable to do this)</li>
+</ol>
+<h3 id="acknowledgement-references">Acknowledgement &amp; References</h3>
+<h4 id="acknowledgements">Acknowledgements</h4>
+<p>I would like to thank the 2nd prize winners in the 2014 Stanford Rendering Competition for their reports, which gave me some information to implement this project more easily; and b03902028, who is also taking this course, for discussing together. Fianlly, I'd like to thank the instructor and the TA in this course for teaching and reading my homework / project report, as well as the authors of pbrt.</p>
+<h4 id="references">References</h4>
+<ol style="list-style-type: decimal">
+<li><p>Ng, R. et al., P. 2005. Light field photography with a hand-held plenoptic camera. Computer Science Technical Report CSTR 2, 11. (paper available at http://graphics.stanford.edu/papers/lfcamera/lfcamera-150dpi.pdf)</p></li>
+<li><p>Hossain, Z. et al., CS348b Project: Light Field Camera Simulation (http://graphics.stanford.edu/courses/cs348b-competition/cs348b-14/second_report.pdf)</p></li>
+<li><p>&quot;Light-field camera&quot;, Wikipedia. (https://en.wikipedia.org/wiki/Light-field_camera)</p></li>
+</ol>
